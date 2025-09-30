@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz 3</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(120deg, #e0eafc, #cfdef3);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      padding: 32px 24px 24px 24px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 16px;
+      font-size: 2.5rem;
+      letter-spacing: 2px;
+    }
+    .scatter-plot {
+      width: 100%;
+      height: 350px;
+      margin-bottom: 16px;
+    }
+    .button-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    button {
+      background: #4f8cff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    .instructions {
+      margin: 24px 0 32px 0;
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+    .questions {
+      margin: 32px 0 32px 0;
+      font-size: 1.1rem;
+      line-height: 1.7;
+    }
+    .pred-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      background: #f8fafc;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .pred-table th, .pred-table td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 10px;
+      text-align: right;
+    }
+    .pred-table th {
+      background: #e0eafc;
+      font-weight: bold;
+    }
+    .pred-table caption {
+      caption-side: top;
+      text-align: left;
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .footer-instructions {
+      margin-top: 40px;
+      font-size: 1.05rem;
+      color: #444;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Quiz 3</h1>
+    <div class="instructions">
+      <b>Instructions:</b> For the first question, include your Google Colab code. For the second and third questions, include the link to your live app and your zipped repository.
+    </div>
+    <div id="scatter-container">
+      <div style="text-align:center; font-size:1.3rem; font-weight:bold; margin-bottom:8px;">Gradient Descent</div>
+      <canvas id="scatter" class="scatter-plot"></canvas>
+      <div class="button-row">
+        <button id="regen">Regenerate Data</button>
+        <button id="download">Download CSV</button>
+        <button id="reveal">Reveal Tree (depth 3) Solution</button>
+      </div>
+      <div id="pred-table-container"></div>
+    </div>
+    <div class="questions">
+      <ol>
+        <li>“Please download the dataset as a CSV into python and replicate the noisy polynomial. Train a decision tree regressor with a depth of 3, create a range of values for prediction, and plot the data and the regression tree. Also, double check to make sure your predictions match the ones in the ‘Predictions’ table of this web app.”</li>
+        <li>“Please make an interactive web application that shows the CART algorithm applied to the Palmer Archipelago Penguin Dataset. This dataset has three species: Chinstrap, Adelie, and Gentoo. The feature selection should have culmen length (mm), culmen depth (mm), flipper length (mm), and body mass (g). Identify which feature is the best fit, the threshold, the parent gini, child gini (weighted), and gain (reduction).”</li>
+        <li>“Please make another web application that demonstrates the differences between boosting and bagging ensemble methods. The web app should allow the user to interact with a simple dataset and observe how each method constructs its ensemble and makes predictions.”</li>
+      </ol>
+    </div>
+    <div class="footer-instructions">
+      For the first two questions, include the link to your live app and your zipped repository. For the third question, include your Google Colab code.
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // --- Data Generation ---
+    function randomPolyType() {
+      return Math.random() < 0.5 ? 'quadratic' : 'cubic';
+    }
+    function generateData(n=30, type=randomPolyType()) {
+      const x = Array.from({length: n}, () => Math.random() * 10 - 5);
+      let y;
+      let coeffs;
+      if (type === 'quadratic') {
+        coeffs = [Math.random()*2-1, Math.random()*2-1, Math.random()*2-1]; // ax^2 + bx + c
+        y = x.map(xi => coeffs[0]*xi*xi + coeffs[1]*xi + coeffs[2] + (Math.random()-0.5)*3);
+      } else {
+        coeffs = [Math.random()*0.5-0.25, Math.random()*2-1, Math.random()*2-1, Math.random()*2-1]; // ax^3 + bx^2 + cx + d
+        y = x.map(xi => coeffs[0]*xi*xi*xi + coeffs[1]*xi*xi + coeffs[2]*xi + coeffs[3] + (Math.random()-0.5)*3);
+      }
+      return {x, y, type, coeffs};
+    }
+    // --- Decision Tree (depth 3) ---
+    // For simplicity, use a hand-coded regression tree for the generated data
+    function fitTree(x, y) {
+      // Sort by x
+      const idx = x.map((v,i)=>i).sort((a,b)=>x[a]-x[b]);
+      const xs = idx.map(i=>x[i]);
+      const ys = idx.map(i=>y[i]);
+      // Recursively split into 2 at best split, up to depth 3
+      function split(xs, ys, depth, maxDepth) {
+        if (depth === maxDepth || xs.length < 4) {
+          const mean = ys.reduce((a,b)=>a+b,0)/ys.length;
+          return {leaf: true, value: mean, xs, ys};
+        }
+        // Try all splits
+        let bestLoss = Infinity, bestIdx = -1;
+        for (let i=2; i<xs.length-2; ++i) {
+          const left = ys.slice(0,i), right = ys.slice(i);
+          const leftMean = left.reduce((a,b)=>a+b,0)/left.length;
+          const rightMean = right.reduce((a,b)=>a+b,0)/right.length;
+          const loss = left.reduce((a,b)=>a+(b-leftMean)**2,0) + right.reduce((a,b)=>a+(b-rightMean)**2,0);
+          if (loss < bestLoss) {
+            bestLoss = loss;
+            bestIdx = i;
+          }
+        }
+        if (bestIdx === -1) {
+          const mean = ys.reduce((a,b)=>a+b,0)/ys.length;
+          return {leaf: true, value: mean, xs, ys};
+        }
+        return {
+          leaf: false,
+          split: (xs[bestIdx-1]+xs[bestIdx])/2,
+          left: split(xs.slice(0,bestIdx), ys.slice(0,bestIdx), depth+1, maxDepth),
+          right: split(xs.slice(bestIdx), ys.slice(bestIdx), depth+1, maxDepth),
+          xs, ys
+        };
+      }
+      return split(xs, ys, 0, 3);
+    }
+    function predictTree(tree, x) {
+      if (tree.leaf) return tree.value;
+      if (x < tree.split) return predictTree(tree.left, x);
+      else return predictTree(tree.right, x);
+    }
+    // --- Chart Drawing ---
+    let chart;
+    let currentData, currentTree, predTableData;
+    function drawScatter() {
+      const ctx = document.getElementById('scatter').getContext('2d');
+      if (chart) chart.destroy();
+      // Data
+      const dataPoints = currentData.x.map((xi,i)=>({x:xi, y:currentData.y[i]}));
+      // Tree prediction
+      const xPred = Array.from({length: 100}, (_,i)=>-5 + i*10/99);
+      const yPred = xPred.map(xi=>predictTree(currentTree, xi));
+      // Chart.js
+      chart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Data',
+              data: dataPoints,
+              backgroundColor: '#4f8cff',
+              pointRadius: 4,
+            },
+            {
+              label: 'Tree (depth 3)',
+              data: xPred.map((x, i) => ({x, y: yPred[i]})),
+              type: 'line',
+              borderColor: '#f59e42',
+              borderWidth: 2,
+              fill: false,
+              pointRadius: 0,
+              tension: 0,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true, position: 'top' },
+            title: { display: false }
+          },
+          scales: {
+            x: { title: { display: true, text: 'x' }, min: -5, max: 5 },
+            y: { title: { display: true, text: 'y' } }
+          }
+        }
+      });
+      // Save pred table data
+      predTableData = xPred.map((x,i)=>({x: +x.toFixed(3), y_pred: +yPred[i].toFixed(3)}));
+    }
+    function showPredTable() {
+      // For each x in predTableData, find closest y in data
+      const tableRows = predTableData.map(row => {
+        // Find closest x in data
+        let minDist = Infinity, y = null;
+        for (let i=0; i<currentData.x.length; ++i) {
+          const d = Math.abs(currentData.x[i]-row.x);
+          if (d < minDist) {
+            minDist = d;
+            y = currentData.y[i];
+          }
+        }
+        return `<tr><td>${row.x}</td><td>${y.toFixed(3)}</td><td>${row.y_pred}</td></tr>`;
+      });
+      document.getElementById('pred-table-container').innerHTML = `
+        <table class="pred-table">
+          <caption>Predictions (depth 3 tree)</caption>
+          <thead><tr><th>x</th><th>y</th><th>y_pred</th></tr></thead>
+          <tbody>${tableRows.join('')}</tbody>
+        </table>
+      `;
+    }
+    function downloadCSV() {
+      let csv = 'x,y\n';
+      for (let i=0; i<currentData.x.length; ++i) {
+        csv += `${currentData.x[i]},${currentData.y[i]}\n`;
+      }
+      const blob = new Blob([csv], {type: 'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'quiz3_data.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    // --- Event Listeners ---
+    function regenerate() {
+      currentData = generateData();
+      currentTree = fitTree(currentData.x, currentData.y);
+      document.getElementById('pred-table-container').innerHTML = '';
+      drawScatter();
+    }
+    document.getElementById('regen').onclick = regenerate;
+    document.getElementById('download').onclick = downloadCSV;
+    document.getElementById('reveal').onclick = showPredTable;
+    // --- Init ---
+    regenerate();
+  </script>
+</body>
+</html>
